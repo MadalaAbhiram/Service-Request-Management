@@ -8,7 +8,7 @@ from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 import httpx
 
-BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8007").rstrip("/")
+BACKEND_URL = os.getenv("BACKEND_URL", "https://service-request-management-2-8n0g.onrender.com").rstrip("/")
 NODE_BACKEND_URL = os.getenv("NODE_BACKEND_URL", "http://localhost:9000").rstrip("/")
 bearer_scheme = HTTPBearer(auto_error=False)
 
