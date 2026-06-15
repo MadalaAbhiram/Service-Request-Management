@@ -2,9 +2,13 @@ package com.srm;
 
 import com.srm.mongo.MongoConnectionEvent;
 import com.srm.mongo.MongoConnectionEventRepository;
+import com.srm.mongo.MongoRequestStatusService;
+import com.srm.model.RequestStatus;
 import com.srm.model.User;
+import com.srm.repository.RequestStatusRepository;
 import com.srm.repository.UserRepository;
 import java.time.Instant;
+import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.CommandLineRunner;
@@ -55,6 +59,29 @@ public class SrmBackendApplication {
             }
 
             System.out.println("Admin ready: " + adminEmail);
+        };
+    }
+
+    @Bean
+    CommandLineRunner syncMongoRequestStatuses(
+        RequestStatusRepository requestStatusRepository,
+        MongoRequestStatusService mongoRequestStatusService
+    ) {
+        return args -> {
+            String allowed = System.getenv("ENABLE_MONGO_SYNC");
+            if (allowed == null || !(allowed.equalsIgnoreCase("true") || allowed.equals("1"))) {
+                return;
+            }
+
+            try {
+                List<RequestStatus> statuses = requestStatusRepository.findAll();
+                if (!statuses.isEmpty()) {
+                    mongoRequestStatusService.syncStatuses(statuses);
+                    logger.info("Scheduled startup sync for {} request status records.", statuses.size());
+                }
+            } catch (Exception ex) {
+                logger.error("Request status startup sync failed:", ex);
+            }
         };
     }
 }

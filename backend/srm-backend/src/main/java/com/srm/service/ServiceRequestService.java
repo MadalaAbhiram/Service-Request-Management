@@ -1,10 +1,13 @@
 package com.srm.service;
 
 import com.srm.dto.ServiceRequestDTO;
+import com.srm.model.RequestStatus;
 import com.srm.model.ServiceRequest;
 import com.srm.model.User;
+import com.srm.mongo.MongoRequestStatusService;
 import com.srm.mongo.MongoServiceRequest;
 import com.srm.mongo.MongoServiceRequestRepository;
+import com.srm.repository.RequestStatusRepository;
 import com.srm.repository.ServiceRequestRepository;
 import com.srm.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -12,6 +15,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Objects;
 
 @Service
 public class ServiceRequestService {
@@ -24,6 +28,12 @@ public class ServiceRequestService {
 
     @Autowired
     private MongoServiceRequestRepository mongoServiceRequestRepository;
+
+    @Autowired
+    private RequestStatusRepository requestStatusRepository;
+
+    @Autowired(required = false)
+    private MongoRequestStatusService mongoRequestStatusService;
 
     public ServiceRequest createRequest(ServiceRequestDTO dto, String email) {
         User user = userRepository.findByEmail(email)
@@ -39,6 +49,7 @@ public class ServiceRequestService {
 
         ServiceRequest savedRequest = serviceRequestRepository.save(request);
         saveRequestToMongo(savedRequest);
+        createStatusHistory(savedRequest, "open", user);
         return savedRequest;
     }
 
@@ -77,11 +88,18 @@ public class ServiceRequestService {
         return serviceRequestRepository.findByUser(user);
     }
 
-    public ServiceRequest updateStatus(Long id, String status) {
+    public ServiceRequest updateStatus(Long id, String status, Authentication authentication) {
         ServiceRequest request = getRequestById(id);
+        User updater = null;
+        if (authentication != null) {
+            updater = userRepository.findByEmail(authentication.getName())
+                    .orElse(null);
+        }
+
         request.setStatus(status);
         ServiceRequest savedRequest = serviceRequestRepository.save(request);
         saveRequestToMongo(savedRequest);
+        createStatusHistory(savedRequest, status, updater);
         return savedRequest;
     }
 
@@ -93,22 +111,56 @@ public class ServiceRequestService {
         return savedRequest;
     }
 
-    public ServiceRequest updateRequest(Long id, ServiceRequestDTO dto) {
+    public ServiceRequest updateRequest(Long id, ServiceRequestDTO dto, Authentication authentication) {
         ServiceRequest request = getRequestById(id);
+        String previousStatus = request.getStatus();
         request.setTitle(dto.getTitle());
         request.setDescription(dto.getDescription());
         request.setCategory(dto.getCategory());
         request.setPriority(dto.getPriority());
         request.setStatus(dto.getStatus());
+
         ServiceRequest savedRequest = serviceRequestRepository.save(request);
         saveRequestToMongo(savedRequest);
+
+        if (!Objects.equals(previousStatus, dto.getStatus())) {
+            User updater = null;
+            if (authentication != null) {
+                updater = userRepository.findByEmail(authentication.getName()).orElse(null);
+            }
+            createStatusHistory(savedRequest, dto.getStatus(), updater);
+        }
         return savedRequest;
     }
 
     public String deleteRequest(Long id) {
+        List<RequestStatus> statuses = requestStatusRepository.findByServiceRequest_Id(id);
+        if (!statuses.isEmpty()) {
+            requestStatusRepository.deleteAll(statuses);
+            if (mongoRequestStatusService != null) {
+                mongoRequestStatusService.deleteStatusByRequestId(id);
+            }
+        }
+
         serviceRequestRepository.deleteById(id);
         mongoServiceRequestRepository.deleteByRequestId(id);
         return "Request deleted successfully!";
+    }
+
+    private void createStatusHistory(ServiceRequest request, String status, User updatedBy) {
+        RequestStatus requestStatus = new RequestStatus();
+        requestStatus.setServiceRequest(request);
+        requestStatus.setStatus(status);
+        requestStatus.setUpdatedBy(updatedBy);
+
+        RequestStatus savedStatus = requestStatusRepository.save(requestStatus);
+        saveStatusToMongo(savedStatus);
+    }
+
+    private void saveStatusToMongo(RequestStatus status) {
+        if (mongoRequestStatusService != null) {
+            mongoRequestStatusService.syncStatus(status);
+        }
     }
 
     private void saveRequestToMongo(ServiceRequest request) {

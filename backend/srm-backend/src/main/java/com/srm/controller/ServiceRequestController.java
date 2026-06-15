@@ -55,15 +55,17 @@ public class ServiceRequestController {
     @PutMapping("/{id}")
     public ResponseEntity<ServiceRequest> updateRequest(
             @PathVariable Long id,
-            @RequestBody ServiceRequestDTO dto) {
-        return ResponseEntity.ok(serviceRequestService.updateRequest(id, dto));
+            @RequestBody ServiceRequestDTO dto,
+            Authentication authentication) {
+        return ResponseEntity.ok(serviceRequestService.updateRequest(id, dto, authentication));
     }
 
     @PatchMapping("/{id}/status")
     public ResponseEntity<ServiceRequest> updateStatus(
             @PathVariable Long id,
-            @RequestParam String status) {
-        return ResponseEntity.ok(serviceRequestService.updateStatus(id, status));
+            @RequestParam String status,
+            Authentication authentication) {
+        return ResponseEntity.ok(serviceRequestService.updateStatus(id, status, authentication));
     }
 
     @PatchMapping("/{id}/priority")
